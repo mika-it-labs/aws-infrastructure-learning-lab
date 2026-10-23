@@ -1,38 +1,91 @@
-# AWS CI/CD・EC2 学習記録とECS/Terraform実演記録
+# AWSインフラ学習ラボ
 
-S3、CodeBuild、CodePipelineによるCIと、EC2・SSM・CodeDeploy Agentに関する学習
+AWSの開発・運用の流れを、学習記録・操作手順・サンプルコードでまとめたリポジトリです。
 
-## 実施状況
+S3に置いたソースを自動テストするCI、EC2の管理とデプロイの準備、IAMの権限設定、学習後のリソース削除を扱います。ECS/Fargate・Terraformについては、今後の学習計画と既存の演習資料を収録しています。
 
-|項目|記録の根拠・範囲|
+## 学習の全体像
+
+学習内容は、大きく3つに分かれます。
+
+### 1. ソースを受け取り、自動でテストする
+
+S3にソースZIPを配置し、CodePipelineで処理の流れを管理します。CodeBuildがPythonテストを実行し、配布に使うファイルを成果物として出力します。
+
+```mermaid
+flowchart LR
+    S3["S3<br/>ソースZIP"] --> Pipeline["CodePipeline<br/>処理の流れを管理"]
+    Pipeline --> Build["CodeBuild<br/>Pythonテスト"]
+    Build --> Artifact["成果物<br/>配布用ファイル"]
+```
+
+### 2. EC2を管理し、デプロイに必要な仕組みを学ぶ
+
+SSMでEC2を管理する方法と、CodeDeploy Agent、配布ファイル、検証スクリプトの役割を整理しています。
+
+|要素|役割|
 |---|---|
-|S3 → CodeBuild → CodePipeline CI|S3のソースをCodePipelineで受け渡し、CodeBuildで処理する学習。実行ID・成功ログは今回未取得|
-|EC2＋SSM＋CodeDeploy Agent|インスタンス、接続・管理、Agentに関する学習。OS、Agent版、現在の状態は未確認|
-|Pythonテスト、appspec.yml、validate.sh、ZIP|テストと配布物・検証スクリプトの学習。元ファイルの完全な内容は未取得|
-|IAM、削除確認|権限設定と後片付けの学習。実ポリシー・全削除・請求額ゼロは未確認|
-|CodePipelineからEC2への自動デプロイ完遂|CIの実施とAgentの準備を、CD全体の成功と読み替えない|
-|ECS/Fargate・Terraform|既存リポジトリには別の実施済み記述がある。下記の出所説明を参照|
+|EC2|アプリケーションの配置先となるサーバー|
+|SSM|EC2への接続・管理|
+|CodeDeploy Agent|EC2上でCodeDeployの配布処理を実行|
+|appspec.yml|ファイルの配置先と、配布時に実行する処理を定義|
+|validate.sh|配置後の動作を確認|
+|ZIP|ソースや配布ファイルをひとつにまとめる|
 
-## 資料
+CIの学習とEC2へのデプロイ準備を扱っています。CodePipelineからEC2までの自動デプロイ完了は、確認済みの成果には含めていません。
 
-- [学習内容・到達点・証拠の限界](docs/learning-record.md)
-- [CI・EC2・CodeDeployの復習手順](docs/procedure.md)
-- [IAMの役割と権限の確認](docs/iam.md)
-- [障害の切り分け](docs/troubleshooting.md)
-- [削除・残存・料金の確認](docs/cleanup.md)
-- [検証範囲](docs/verification.md) / [公開時の確認](docs/publication-checks.md)
-- [ECS/Terraformの今後の計画](docs/ecs-terraform-plan.md)
-- [新規作成した学習用サンプル](examples/ci-ec2/README.md)
-- [学習サマリー](docs/summary.md) / [学び](docs/learnings.md)
+### 3. 権限を確認し、後片付けまで行う
 
-## 出所と既存内容の保護
+サービスごとに必要なIAMロールを整理し、エラーが起きたときの確認方法を学びます。学習後は、EC2・S3・ログ・IAMなどの残存リソースと料金を確認します。
 
-今回の実施状況は本人から提示された範囲に基づきます。参照会話の取得結果には過去の詳細作業ログが含まれず、応答本文も参照マーカーのみでした。具体的な時刻、テスト件数、設定値、成功メッセージを補っていません。
+## 目的別の読み方
 
-既存版はECS/Fargate・Terraformを実施済みと記載していました。今回の指定と相違するため、[元README](archive/ecs-terraform-original/README.md)と元docsを原文保存し、現行の記録とは分離しました。既存記録のログ自体を今回再検証したわけではありません。既存の[Terraformコード](terraform/)とlock fileは変更せず保持しています。コードの存在は、この学習でapplyを実施した証拠にはしません。
+|知りたいこと|読む資料|
+|---|---|
+|学習内容を短く把握したい|[学習サマリー](docs/summary.md)|
+|どこまで学習したか確認したい|[学習記録](docs/learning-record.md)|
+|CIとEC2の手順を復習したい|[操作手順](docs/procedure.md)|
+|IAMロールの違いを理解したい|[IAMの役割と権限](docs/iam.md)|
+|エラーの調べ方を知りたい|[障害の切り分け](docs/troubleshooting.md)|
+|学習後の削除対象を確認したい|[削除・残存・料金の確認](docs/cleanup.md)|
+|コードを動かして復習したい|[Python・CI・EC2向けサンプル](examples/ci-ec2/README.md)|
+|次にECSとTerraformを学びたい|[ECS/Fargate・Terraform学習計画](docs/ecs-terraform-plan.md)|
 
-サンプルは今回新規作成した復習用コードです。当時のコードの復元でも、AWSで動作確認済みの成果物でもありません。AWSリソースの作成・削除はこの更新作業では実行していません。
+## サンプルコードを試す
 
-## 名称
+[examples/ci-ec2/](examples/ci-ec2/)には、復習用に作成した最小構成のサンプルがあります。
 
-リポジトリ名は `aws-infrastructure-learning-lab` です。2026年10月23日（JST）に `aws-ecs-fargate-terraform-lab` から変更しました。
+|ファイル|内容|
+|---|---|
+|[app.py](examples/ci-ec2/app.py)|テスト対象のPythonプログラム|
+|[tests/test_app.py](examples/ci-ec2/tests/test_app.py)|Pythonの単体テスト|
+|[buildspec.yml](examples/ci-ec2/buildspec.yml)|CodeBuildで実行するテストと成果物の指定|
+|[appspec.yml](examples/ci-ec2/appspec.yml)|EC2向けのファイル配置と検証処理の指定|
+|[scripts/validate.sh](examples/ci-ec2/scripts/validate.sh)|配置後のテストと出力確認|
+|[package.py](examples/ci-ec2/package.py)|必要なファイルだけをZIPにまとめる処理|
+
+Pythonを用意し、リポジトリのルートから次のコマンドを実行します。
+
+```sh
+cd examples/ci-ec2
+python -m unittest discover -s tests -v
+python app.py
+```
+
+ローカル検証ではテスト3件の成功と、アプリの出力 `5` を確認しています。ZIP作成やAWSでの利用方法は[サンプルの説明](examples/ci-ec2/README.md)を参照してください。
+
+## ECS/Fargate・Terraformの資料
+
+この学習の次のステップとして、コンテナ基盤の構築・起動・ログ確認・削除をTerraformとAWS CLIで学ぶ計画をまとめています。
+
+- [今後の学習計画](docs/ecs-terraform-plan.md)
+- [既存のTerraformコード](terraform/)
+- [以前のECS/Terraform演習資料](archive/ecs-terraform-original/README.md)
+
+以前の演習資料は、今回のCI・EC2学習記録と分けて保存しています。
+
+## 記録と検証について
+
+学習記録は実施者から提供された内容をもとに整理しています。復習用サンプルは新規作成したもので、当時のコードの復元ではありません。AWS上でのサンプル動作は未検証です。
+
+確認できた範囲や検査結果の詳細は、[検証範囲](docs/verification.md)と[公開時の確認](docs/publication-checks.md)に記載しています。
