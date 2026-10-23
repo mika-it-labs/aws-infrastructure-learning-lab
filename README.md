@@ -35,4 +35,4 @@ S3、CodeBuild、CodePipelineによるCIと、EC2・SSM・CodeDeploy Agentに関
 
 ## 名称
 
-内容を表す推奨リポジトリ名は `aws-cicd-ec2-learning-lab` です。接続ツールにはリポジトリ設定・名称変更APIがないため、現在のURLを維持しています。
+リポジトリ名は `aws-infrastructure-learning-lab` です。2026年10月23日（JST）に `aws-ecs-fargate-terraform-lab` から変更しました。
