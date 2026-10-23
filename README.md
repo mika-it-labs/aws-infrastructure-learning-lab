@@ -1,4 +1,4 @@
-# AWS CI/CD・EC2 学習記録とECS/Terraform学習計画
+# AWS CI/CD・EC2 学習記録とECS/Terraform実演記録
 
 S3、CodeBuild、CodePipelineによるCIと、EC2・SSM・CodeDeploy Agentに関する学習を日本語で整理します。更新日：2026年10月23日（JST）。
 
