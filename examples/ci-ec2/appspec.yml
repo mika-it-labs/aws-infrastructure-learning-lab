@@ -1,0 +1,13 @@
+# EC2/Linux向け。既存環境の配置先と重ならないことを確認する。
+version: 0.0
+os: linux
+files:
+  - source: app.py
+    destination: /opt/aws-learning-ci-ec2
+  - source: tests
+    destination: /opt/aws-learning-ci-ec2/tests
+hooks:
+  ValidateService:
+    - location: scripts/validate.sh
+      timeout: 60
+      runas: root

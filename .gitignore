@@ -20,3 +20,9 @@ credentials
 *.log
 .DS_Store
 Thumbs.db
+
+# Python・復習サンプルの生成物
+__pycache__/
+*.py[cod]
+.venv/
+examples/ci-ec2/dist/

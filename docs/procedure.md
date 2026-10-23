@@ -1,60 +1,43 @@
-# 構築・操作手順（PowerShell）
+# CI・EC2・CodeDeployの復習手順
 
-以下は当日の操作を再実行しやすく整理した手順です。エラー検査や変数の自動取得は文書化時に補いました。コマンドを実行するとAWS料金が発生し得ます。
+以下は今後の再学習用手順です。当時の操作を完全再現した記録ではありません。実施済み範囲は[学習記録](learning-record.md)を参照してください。
 
-## 事前確認と構築
+## 前提
 
-AWS CLI v2、Terraform 1.5以上を用意し、ローカルでtrainingプロファイルを設定します。認証情報はファイル・GitHubへ記載しません。操作先はローカルで確認し、その出力を公開しません。
+対象アカウント・リージョンをローカルで確認し、専用の学習リソースと権限を用意します。EC2のOSに対応するAgent手順を選び、SSM・S3・CodeDeploy等への通信経路を確認します。操作ログの実識別子は公開しません。
 
-```powershell
-aws sts get-caller-identity --profile training --region ap-northeast-1
-cd terraform
-terraform init
-terraform fmt -check
-terraform validate
-terraform plan
-terraform apply
+## CI
+
+1. [サンプル](../examples/ci-ec2/README.md)をローカルでテストし、ZIPを生成する。
+2. S3ソースバケットのバージョニングを有効にし、決めたキーへソースZIPを置く。公開アクセスは必要ない。
+3. CodeBuildに対応するLinux/Pythonランタイムとサービスロールを設定する。単独実行はS3ソース、Pipeline経由はCODEPIPELINEソース・アーティファクトを使用する。
+4. CodePipelineでS3 Source → CodeBuild Buildを構成し、入出力アーティファクト名を対応させる。イベント検知かポーリングかを確認する。
+5. Pipelineの実行ID、Sourceのリビジョン、Buildのログとテスト結果を確認する。テスト失敗時は先へ進まないことも検証する。
+6. 出力アーティファクトにappspec.ymlがルートで入り、相対パスが成立するか確認する。
+
+## EC2とAgent
+
+SSM用インスタンスロールと接続権限、SSM Agent、必要なエンドポイントへのHTTPS通信を確認します。SSHポート開放を前提にしません。CodeDeploy AgentはOS別の公式手順で別途導入します。Linuxでの状態確認例：
+
+```sh
+sudo systemctl status amazon-ssm-agent
+sudo systemctl status codedeploy-agent
+sudo tail -n 100 /var/log/aws/codedeploy-agent/codedeploy-agent.log
 ```
 
-default VPCが存在し、選択するサブネットにIGWへのデフォルトルート、DNSと必要な外向き通信があることを確認します。コードはVPC内サブネットを検索し、当日は2件でした。常に2件となる保証や順序保証はありません。VPC・サブネット・IGWを新規作成するコードではありません。
+サービス名・ログパスはOSと導入方法に合わせます。確認出力をそのまま公開しません。
 
-## 単発タスク起動
+## デプロイ検証（今後の検証・過去の完遂は未確認）
 
-```powershell
-$cluster = terraform output -raw cluster_name
-$taskDefinition = terraform output -raw task_definition_arn
-$subnets = @(terraform output -json subnet_ids | ConvertFrom-Json)
-if ($subnets.Count -eq 0) { throw 'No subnet found' }
-$subnet = $subnets[0] # ルート等を確認したサブネットを選択
-$sg = terraform output -raw security_group_id
-$logGroup = terraform output -raw log_group_name
-$network = "awsvpcConfiguration={subnets=[$subnet],securityGroups=[$sg],assignPublicIp=ENABLED}"
-$result = aws ecs run-task --cluster $cluster --task-definition $taskDefinition --launch-type FARGATE --network-configuration $network --profile training --region ap-northeast-1 --output json
-if ($LASTEXITCODE -ne 0) { throw 'run-task failed' }
-$run = $result | ConvertFrom-Json
-if (@($run.failures).Count -gt 0 -or @($run.tasks).Count -eq 0) { throw 'No task started; inspect failures locally' }
-$taskArn = $run.tasks[0].taskArn
-aws ecs wait tasks-running --cluster $cluster --tasks $taskArn --profile training --region ap-northeast-1
-if ($LASTEXITCODE -ne 0) { throw 'Task did not reach RUNNING; inspect stopped reason' }
-```
+CodeDeployアプリケーションとデプロイグループ、EC2の選択タグ、サービスロール、配布物のS3取得権限を設定します。必要ならPipelineにDeployを追加しBuild出力を渡します。新規サンプルはファイル配置とValidateServiceのみで、Webサービスを起動しません。
 
-当日はrun-task応答後にlist-tasksとdescribe-tasksを使用しました。上のtasks-running waiterは再実行時の補助手順です。public IP設定はTerraformタスク定義ではなく、CLIのネットワーク設定で指定します。
+デプロイIDと各イベントの成否、配置ファイル、フックの出力を確認します。成功と確認できた範囲のみ記録し、最後に[削除確認](cleanup.md)を行います。
 
-## 状態とログ
+## 公式資料
 
-```powershell
-aws ecs list-tasks --cluster $cluster --desired-status RUNNING --profile training --region ap-northeast-1
-aws ecs describe-tasks --cluster $cluster --tasks $taskArn --query 'tasks[*].{TaskStatus:lastStatus,DesiredStatus:desiredStatus,HealthStatus:healthStatus,Containers:containers[*].[name,lastStatus,exitCode,reason],StoppedReason:stoppedReason}' --output json --profile training --region ap-northeast-1
-aws logs describe-log-streams --log-group-name $logGroup --profile training --region ap-northeast-1
-$taskId = ($taskArn -split '/')[-1]
-$logStream = "apache/apache/$taskId"
-aws logs get-log-events --log-group-name $logGroup --log-stream-name $logStream --query 'events[*].[timestamp,message]' --output table --profile training --region ap-northeast-1
-```
+- [S3 source action](https://docs.aws.amazon.com/codepipeline/latest/userguide/action-reference-S3.html)
+- [Buildspec](https://docs.aws.amazon.com/codebuild/latest/userguide/build-spec-ref.html)
+- [AppSpec](https://docs.aws.amazon.com/codedeploy/latest/userguide/reference-appspec-file.html)
+- [CodeDeploy Agent](https://docs.aws.amazon.com/codedeploy/latest/userguide/codedeploy-agent.html)
 
-タスクとコンテナのRUNNING、Apacheの正常起動メッセージを確認します。ログの到着に時間差がある場合は状態・ストリーム名・実行ロールを確認します。HealthStatus UNKNOWNはHEALTHYの証明ではありません。
-
-SG inboundなしのため、public IPへのブラウザーアクセスは検証対象外です。HTTP疎通のために無条件でポートを開放しません。
-
-## 完了
-
-[停止・削除手順](cleanup.md)に進み、CLIで起動したタスクを停止後、Terraform管理リソースを削除します。原コードは保持し、改善案を実装済みとは扱いません。
+公式資料は手順の根拠であり、過去の実施結果の証拠ではありません。

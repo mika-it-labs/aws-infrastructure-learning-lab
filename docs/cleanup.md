@@ -1,37 +1,14 @@
-# 停止・削除・権限整理
+# 削除・残存・料金の確認
 
-## 単発タスクの停止
+削除確認の学習は実施済み（本人申告）です。対象一覧・完了ログは未取得のため、全削除や請求額ゼロとは記載しません。以下は次回のチェックリストです。
 
-操作手順で取得した変数を同じPowerShellセッションで使用します。
+1. 実行中のPipeline・Build・Deploymentを確認し、新規起動の検知設定を停止する。進行中処理の扱いを確認する。
+2. 自分の学習用CodePipeline、CodeBuildプロジェクト、CodeDeployデプロイグループ・アプリケーションを依存関係に沿って整理する。
+3. EC2を終了する。停止だけではEBS等が残るため、終了後にEBS、スナップショット、Elastic IP、専用SG等を個別確認する。共有VPC・共有SGは削除しない。
+4. S3のソース・成果物を確認する。バージョニングされたバケットでは現行オブジェクトだけでなく旧バージョン・削除マーカー・未完了マルチパートも確認する。保持要件・Object Lockがあれば従う。
+5. 学習で作成したLogs、イベント検知ルールとターゲット、関連通知等を確認する。共有リソースは残す。
+6. 専用IAMロール・インスタンスプロファイル・ポリシーの関連付けを確認し、不要なもののみ解除・削除する。共有KMSキーは削除対象にしない。
+7. 同じアカウント・対象リージョンで一覧を再確認し、IAM等のグローバルリソースも確認する。削除対象・結果・残存理由を匿名化して記録する。
+8. 請求画面やCost Explorerで遅延を考慮して料金を確認する。コンソールで見えないこと、stateが空であること、料金がゼロであることは同義ではない。
 
-```powershell
-aws ecs stop-task --cluster $cluster --task $taskArn --reason 'Training completed' --profile training --region ap-northeast-1
-if ($LASTEXITCODE -ne 0) { throw 'stop-task failed' }
-aws ecs wait tasks-stopped --cluster $cluster --tasks $taskArn --profile training --region ap-northeast-1
-if ($LASTEXITCODE -ne 0) { throw 'tasks-stopped waiter failed' }
-aws ecs list-tasks --cluster $cluster --desired-status RUNNING --profile training --region ap-northeast-1
-```
-
-停止要求直後のdesiredStatusだけで完了とせず、待機と残存一覧で確認します。別タスクがある場合は所有者と用途を確認し、今回起動したものだけを停止します。
-
-## 管理リソースの削除
-
-```powershell
-terraform plan -destroy
-terraform destroy
-if ($LASTEXITCODE -ne 0) { throw 'destroy failed; inspect remaining resources' }
-terraform state list
-if ($LASTEXITCODE -ne 0) { throw 'state inspection failed' }
-```
-
-計画を確認してdestroyの確認入力を行います。当日はIAMロール1件が残り、権限見直し後の再実行で削除されました。stateを強制編集して空にする方法は使いません。
-
-既存VPC・サブネットはdata sourceなので削除しません。タスク定義のdestroyは登録解除であり、AWS側にINACTIVE履歴が見える場合があります。空のstateはアカウント全体のリソース不存在を保証しません。
-
-## コンソールと権限整理
-
-東京リージョンでECS稼働タスク・クラスター・CloudWatch Logs・SG、グローバルなIAMで対象実行ロールの残存を確認します。ロググループ削除によりログは失われるため、必要な証跡は事前に匿名化して保存します。
-
-最後に演習用 `Training-ECS-Terraform-Policy` を利用者から取り外し、他の利用・関連付けがなく今後不要な場合のみ削除します。当日は実施者から取り外し・削除済みと報告がありました。AWS管理ポリシーAmazonECSTaskExecutionRolePolicy自体を削除する操作ではありません。
-
-Fargateタスク、public IPv4、ログ等には料金が発生し得ます。保持1日は停止・削除の代わりではありません。課金状況は請求画面で別途確認し、本資料では請求額ゼロを保証しません。
+この更新作業ではAWSへの削除操作を行っていません。ECS/Terraformの旧削除記録は[保管版](../archive/ecs-terraform-original/docs/cleanup.md)です。

@@ -1,15 +1,13 @@
-# 公開前チェック
+# 今回の公開時チェック（2026年10月23日 JST）
 
-2026年10月23日（JST）の公開準備時に実施。
+- GitHub mainの既存ファイルを読み、旧README・docs 8ファイルを本文変更なしでarchive/ecs-terraform-original/へ保存する構成を確認。
+- 既存Terraform 6ファイル、lock fileは変更対象外。
+- Python 3.12.14で新規サンプルのunittest 3件成功。app.pyの出力5を確認。
+- package.pyは実行したが、この環境でのファイル作成・書き込みエラー（FileNotFoundError、Bad file descriptor）によりZIP生成を完了できず。ZIP生成成功とは扱わない。
+- validate.shのbash構文検査は環境のBash/E_ACCESSDENIEDにより実行不可。EC2でのフック実行も未確認。
+- CodeBuild、CodePipeline、CodeDeploy、SSM、AWS上のリソースや料金は今回検証していない。
+- 新規・更新ファイルに企業名・顧客名、実アカウントID、秘密鍵、代表的なAWSアクセスキー形式を含めないことを確認。
+- 記録の根拠、本人申告、未確認、計画、新規サンプル、旧記録を明示。
+- リポジトリ名称変更は接続ツールに対応操作がなく未実施。推奨名のみREADMEに記載。
 
-- 元のTerraform 6ファイルと公開用ファイルの一致を確認。
-- terraform fmt -check：成功。
-- terraform init：この作業環境のネットワーク制限によりregistry.terraform.ioの名前解決ができず失敗。
-- 既存のproviderとlock fileを参照したterraform validate：providerのスキーマ取得時にPlugin did not respondとなり完了できず。validate成功とは扱わない。
-- 元のlock fileを収録。取得時はAWS provider 6.70.0。実行時点との同一性は未証明。
-- 公開対象のファイル名・本文を検査し、公開禁止の名称、実アカウントID、代表的なAWSキー形式、秘密鍵を検出しないことを確認。
-- .terraform、tfstate、tfvars、生ログを含めないことを確認。
-- Markdownの相対リンクを確認。
-- AWSへのapply・plan・destroyは公開準備時に実行していない。
-
-将来の再実行時は、ネットワーク接続できる環境でinit、validate、planの成功を確認してください。当日の稼働実績と、この公開準備環境の静的検証の成否は別に扱っています。
+旧検査記録は[保管版](../archive/ecs-terraform-original/docs/publication-checks.md)です。過去の検査成功を今回の検査結果に置き換えていません。

@@ -1,86 +1,38 @@
-# AWS ECS Fargate × Terraform 技術ポートフォリオ
+# AWS CI/CD・EC2 学習記録とECS/Terraform学習計画
 
-2026年10月23日（JST）実施／mika-it-labs
+S3、CodeBuild、CodePipelineによるCIと、EC2・SSM・CodeDeploy Agentに関する学習を日本語で整理します。更新日：2026年10月23日（JST）。
 
-Terraformによる構築から、AWS CLIでの起動・稼働確認・ログ検証・停止・削除・権限整理までを記録した個人演習です。
+## 実施状況
 
-## 成果と構成
-
-|項目|設定・結果|
-|---|---|
-|IaC|Terraform 1.5以上、AWS provider `~> 6.0`|
-|リージョン|東京 `ap-northeast-1`|
-|ネットワーク|既存default VPC、参照結果は2サブネット|
-|実行|ECSクラスター、Fargate単発タスク、awsvpc|
-|コンテナ|`public.ecr.aws/docker/library/httpd:2.4`|
-|サイズ|CPU 256（0.25 vCPU）／メモリ512 MiB|
-|権限|execution role + AmazonECSTaskExecutionRolePolicy|
-|ログ|CloudWatch Logs、保持1日、awslogs|
-|通信|SG inboundなし、IPv4 outbound許可、public IP有効|
-|検証|タスク・コンテナRUNNING、Apache正常起動ログ|
-|片付け|停止待機、destroy、権限不足対応後の再destroy、state空|
-
-```mermaid
-flowchart TB
-  TF[Terraform] --> ECS[ECSクラスター・タスク定義]
-  TF --> IAM[Execution role + managed policy]
-  TF --> LOG[CloudWatch Logs 保持1日]
-  CLI[AWS CLI run-task / describe-tasks / stop-task] --> ECS
-  subgraph TOKYO[東京 ap-northeast-1]
-    subgraph VPC[既存 default VPC]
-      S1[サブネット1: 実際の起動先] --> TASK[Fargate Apache / 256 CPU / 512 MiB]
-      S2[サブネット2: 参照のみ]
-      SG[SG inboundなし / outbound許可] --- TASK
-      TASK --> IGW[既存IGWルート + public IP]
-    end
-    ECS -. 管理 .-> TASK
-    IAM -. 実行時権限 .-> TASK
-    TASK -->|awslogs| LOG
-  end
-  IGW --> ECR[Public ECR: httpd:2.4取得]
-```
-
-2サブネットのうち、当日は最初の1サブネットで1タスクを起動しました。ECSサービス、ALB、マルチAZ冗長化は対象外です。public IPがあってもinboundを許可していないため、外部からのHTTP疎通を成果とはしていません。
+|項目|状態|記録の根拠・範囲|
+|---|---|---|
+|S3 → CodeBuild → CodePipeline CI|実施済み（本人申告）|S3のソースをCodePipelineで受け渡し、CodeBuildで処理する学習。実行ID・成功ログは今回未取得|
+|EC2＋SSM＋CodeDeploy Agent|実施済み（本人申告）|インスタンス、接続・管理、Agentに関する学習。OS、Agent版、現在の状態は未確認|
+|Pythonテスト、appspec.yml、validate.sh、ZIP|実施済み（本人申告）|テストと配布物・検証スクリプトの学習。元ファイルの完全な内容は未取得|
+|IAM、削除確認|実施済み（本人申告）|権限設定と後片付けの学習。実ポリシー・全削除・請求額ゼロは未確認|
+|CodePipelineからEC2への自動デプロイ完遂|未確認|CIの実施とAgentの準備を、CD全体の成功と読み替えない|
+|ECS/Fargate・Terraform|この学習記録では計画段階|既存リポジトリには別の実施済み記述がある。下記の出所説明を参照|
 
 ## 資料
 
-1. [提出用サマリー](docs/summary.md)
-2. [構築・操作手順](docs/procedure.md)
-3. [検証結果・根拠](docs/verification.md)
-4. [トラブルシュート](docs/troubleshooting.md)
-5. [学びと改善案](docs/learnings.md)
-6. [停止・削除](docs/cleanup.md)
-7. [Terraformコード](terraform/)
+- [学習内容・到達点・証拠の限界](docs/learning-record.md)
+- [CI・EC2・CodeDeployの復習手順](docs/procedure.md)
+- [IAMの役割と権限の確認](docs/iam.md)
+- [障害の切り分け](docs/troubleshooting.md)
+- [削除・残存・料金の確認](docs/cleanup.md)
+- [検証範囲](docs/verification.md) / [公開時の確認](docs/publication-checks.md)
+- [ECS/Terraformの今後の計画](docs/ecs-terraform-plan.md)
+- [新規作成した学習用サンプル](examples/ci-ec2/README.md)
+- [学習サマリー](docs/summary.md) / [学び](docs/learnings.md)
 
-## コードと証跡の出所
+## 出所と既存内容の保護
 
-ローカル演習ディレクトリから元の `.tf` 6ファイルを取得し、`terraform/` にそのまま収録しました。取得時コードと添付ログの構成は整合しますが、当日の実行時点とのバイト単位の同一性までは証明していません。再構成コードではありません。元のtfvars、state、キャッシュ、未加工ログ、認証情報は収録していません。
+今回の実施状況は本人から提示された範囲に基づきます。参照会話の取得結果には過去の詳細作業ログが含まれず、応答本文も参照マーカーのみでした。具体的な時刻、テスト件数、設定値、成功メッセージを補っていません。
 
-検証結果は会話添付の作業ログを匿名化・要約したものです。公開準備時にAWSへの再デプロイは行っていません。`httpd:2.4` は可変タグ、providerは6系の範囲指定であり、当日の正確なバージョン固定ではありません。
+既存版はECS/Fargate・Terraformを実施済みと記載していました。今回の指定と相違するため、[元README](archive/ecs-terraform-original/README.md)と元docsを原文保存し、現行の記録とは分離しました。既存記録のログ自体を今回再検証したわけではありません。既存の[Terraformコード](terraform/)とlock fileは変更せず保持しています。コードの存在は、この学習でapplyを実施した証拠にはしません。
 
-## 再実行
+サンプルは今回新規作成した復習用コードです。当時のコードの復元でも、AWSで動作確認済みの成果物でもありません。AWSリソースの作成・削除はこの更新作業では実行していません。
 
-PowerShell、Terraform 1.5以上、AWS CLI v2、適切な権限を持つローカルの `training` プロファイルが必要です。料金が発生するため停止・削除まで実施してください。
+## 名称
 
-```powershell
-cd terraform
-terraform init
-terraform fmt -check
-terraform validate
-terraform plan
-terraform apply
-```
-
-既存default VPCに利用可能なサブネットとインターネット向けルートが必要です。コードはVPC内のサブネットを検索するため、環境により件数や順序が変わります。詳細は操作手順を参照してください。
-
-## 参考資料
-
-- [AWS: Fargateタスクのネットワーキング](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/fargate-task-networking.html)
-- [AWS: タスク実行IAMロール](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task_execution_IAM_role.html)
-- [HashiCorp: ECS task definition](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/ecs_task_definition)
-
-参考資料は設計説明に使用し、実施結果は当日の作業ログに基づきます。
-
-## 公開前検査
-
-整形検査は成功しました。validateは環境のprovider応答エラーにより完了していません。取得時のlock file（AWS 6.70.0）を収録しましたが、当日の版と同一とは断定しません。[検査記録](docs/publication-checks.md)を参照してください。
+内容を表す推奨リポジトリ名は `aws-cicd-ec2-learning-lab` です。接続ツールにはリポジトリ設定・名称変更APIがないため、現在のURLを維持しています。
